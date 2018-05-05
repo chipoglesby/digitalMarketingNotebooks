@@ -1,0 +1,105 @@
+---
+title: "Search Term Performance Lookup"
+output: html_notebook
+---
+
+This report was created based on the article published on searchengineland.com by Daniel Gilbert of Brainlabs: https://searchengineland.com/ad-jective-analysis-look-deeper-adwords-search-queries-281816
+
+Initialise API keys, libraries and settings
+
+```{r Initialise}
+
+source("global.R")
+library(googleAuthR)
+library(RAdwords)
+library(stringr)
+library(ggplot2)
+options(googleAuthR.webapp.client_id = clientId)
+options(googleAuthR.webapp.client_secret = clientSecret)
+ga_cache_call("cache")
+adwordsAccessToken <- doAuth()
+data(stop_words)
+
+startDate <- "2017-05-05"
+endDate <- "2018-05-05"
+clientCustomerId <- "587-337-7079"
+
+lookupWords <- c("review", "coupon", "login")
+
+```
+
+Grab search queries:
+
+```{r Data grab}
+
+searchQueryPerformanceQuery <- statement(select=c("Query","MonthOfYear","Clicks","Impressions","Conversions","Cost"),
+                                             report="SEARCH_QUERY_PERFORMANCE_REPORT",
+                                             start=startDate,
+                                             end=endDate)
+    
+searchQueryPerformance <- getData(clientCustomerId=clientCustomerId,
+                                      google_auth=adwordsAccessToken, statement=searchQueryPerformanceQuery)
+
+head(searchQueryPerformance)
+
+```
+
+Filter to only include rows containing lookup words:
+
+```{r Filter queries}
+
+filteredSearchQueries <- searchQueryPerformance %>%
+  filter(str_detect(searchQueryPerformance$Searchterm, paste(lookupWords, 
+                                                             collapse = "|"))) %>%
+  mutate(Term = str_extract(Searchterm, 
+                             paste(lookupWords,collapse = "|")))
+
+head(filteredSearchQueries)
+
+```
+
+Group performance by lookup term:
+
+```{r Queries grouping}
+
+groupedSearchQueries <- filteredSearchQueries %>% 
+  group_by(Term) %>% 
+  summarise(Clicks = sum(Clicks),
+            Impressions = sum(Impressions),
+            Conversions = sum(Conversions),
+            Cost = sum(Cost)) %>% 
+  mutate(Ctr = Clicks/Impressions, Cpc = Cost/Clicks, Cpa = Cost/Conversions, 
+         Cr = Conversions/Clicks)
+
+groupedSearchQueries
+
+```
+
+Group performance by lookup term and month:
+
+```{r Queries grouping by month}
+
+groupedSearchQueriesByMonth <- filteredSearchQueries %>% 
+  group_by(Term, MonthofYear) %>% 
+  summarise(Clicks = sum(Clicks),
+            Impressions = sum(Impressions),
+            Conversions = sum(Conversions),
+            Cost = sum(Cost)) %>% 
+  mutate(Ctr = Clicks/Impressions, Cpc = Cost/Clicks, Cpa = Cost/Conversions, 
+         Cr = Conversions/Clicks)
+
+head(groupedSearchQueriesByMonth)
+
+```
+
+Plot click performance:
+
+```{r Performance plot}
+
+groupedSearchQueriesByMonth$MonthofYear <- factor(groupedSearchQueriesByMonth$MonthofYear,
+                                                  levels=c("January","February","March","April","May","June","July","August","September","October","Novemer","December"))
+ggplot(groupedSearchQueriesByMonth, aes(x = MonthofYear, y = Clicks, fill = Term)) +
+  geom_bar(position = "dodge", stat = "identity")
+
+```
+
