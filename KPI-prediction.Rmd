@@ -1,0 +1,135 @@
+---
+title: "KPI Prediction"
+output: html_notebook
+---
+
+This report was created based on the article published on e-nor.com by Just Marciszewski: https://www.e-nor.com/blog/predictive-analytics/predictive-modeling-for-ecommerce-kpis
+
+Initialise API keys, libraries and settings
+
+```{r Initialise}
+
+source("global.R")
+library(googleAuthR)
+library(googleAnalyticsR)
+library(dplyr)
+library(prophet)
+library(ggplot2)
+options(googleAuthR.webapp.client_id = clientId)
+options(googleAuthR.webapp.client_secret = clientSecret)
+ga_cache_call("cache")
+
+gaAuth <- ga_auth()
+
+trainStartDate <- "2016-05-07"
+trainEndDate <- "2018-04-30"
+validationStartDate <- "2018-05-01"
+validationEndDate <- "2018-05-06"
+forecastPeriod <- 90
+
+viewId <- "104371403"
+kpi <- "transactionRevenue"
+
+```
+
+Grab revenue data:
+
+```{r Data grab}
+
+gaData <- google_analytics(viewId, date_range = c(trainStartDate, validationEndDate), 
+                           metrics = kpi, 
+                           dimensions = 'date', 
+                           anti_sample = TRUE)
+
+names(gaData) <- c("ds", "y")
+
+glimpse(gaData)
+
+```
+
+Check for outliers:
+
+```{r Outliers check}
+
+ggplot(gaData, aes(ds, y)) + geom_line() 
+
+```
+
+Create training and validation datasets:
+
+```{r Training and validation datesets}
+
+trainData <- gaData %>% 
+  filter(ds >= trainStartDate & ds <= trainEndDate)
+
+validationData <- gaData %>% 
+  filter(ds >= validationStartDate & ds <= validationEndDate)
+
+glimpse(trainData)
+glimpse(validationData)
+
+```
+
+Model fitting
+
+```{r Fit the model}
+
+m <- prophet(trainData, yearly.seasonality = T)
+future <- make_future_dataframe(m, periods = forecastPeriod)
+
+forecast <- predict(m, future)
+
+plot(m, forecast)
+prophet_plot_components(m, forecast)
+
+```
+
+Remove outliers:
+
+```{r Outliers removal}
+
+outlierDates <- c("2017-11-24", 
+                  "2017-11-27", 
+                  "2017-12-24", 
+                  "2016-12-24", 
+                  "2017-12-25", 
+                  "2016-12-25", 
+                  "2016-12-31", 
+                  "2017-12-31")
+
+outliers <- trainData$ds %in% as.Date(outlierDates)
+trainData$y[outliers] = NA 
+
+trainData %>%
+  filter(is.na(y))
+
+```
+
+Result validation:
+
+```{r Validation}
+
+totalForecast <- forecast %>% 
+  filter(ds >= validationStartDate & ds <= validationEndDate) %>% 
+  summarise(transactionRevenue = sum(yhat))
+
+totalForecast
+
+totalActual <- validationData %>% 
+  filter(ds >= validationStartDate & ds <= validationEndDate) %>% 
+  summarise(transactionRevenue = sum(y))
+
+totalActual
+
+difference <- ((totalActual$transactionRevenue - totalForecast$transactionRevenue) 
+               / totalForecast$transactionRevenue )
+
+difference
+
+```
+
+
+
+
+
+
