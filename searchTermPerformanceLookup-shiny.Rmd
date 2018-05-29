@@ -1,0 +1,85 @@
+---
+title: "Search Term Performance Lookup"
+author: "Zoran Selinger"
+date: "May 29, 2018"
+output: html_document
+runtime: shiny
+---
+
+# Initialise
+```{r echo=TRUE}
+
+library(RAdwords)
+library(tidyverse)
+library(DT)
+
+adwordsAccessToken <- doAuth()
+
+```
+
+# Input panel
+```{r echo=FALSE}
+
+inputPanel(
+  
+  textInput("adwordsAccountId", "Account ID",
+            placeholder = "XXX-XXX-XXXX", value = "587-337-7079"),
+  
+  dateRangeInput("dateRange","Date Range", start = Sys.Date() - 15, end = Sys.Date()),
+  
+  textInput("lookupTerms", "Enter search terms separated by comma:", "marvin"),
+  
+  actionButton("plotSearchTermPerformance", "Plot Data")
+  
+)
+
+```
+
+# Data grab
+```{r echo=FALSE}
+
+lastSearchTermPerformanceQuery <- NULL
+lastSearchTermPerformance <- NULL 
+
+searchTermsPerformance <- reactive({
+  
+  lookupWords <- reactive({
+    str_replace_all(input$lookupTerms, ",", "|")
+  })
+  
+  searchTermPerformanceQuery <- statement(select=c("Query","MonthOfYear","Clicks","Impressions","Conversions","Cost"),
+                                          report="SEARCH_QUERY_PERFORMANCE_REPORT",
+                                          start=input$dateRange[1],
+                                          end=input$dateRange[2])
+  
+  if(is.null(lastSearchTermPerformanceQuery) || !identical(lastSearchTermPerformanceQuery, searchTermPerformanceQuery)){
+    
+    searchTermPerformance <- getData(clientCustomerId=input$adwordsAccountId,
+                                     google_auth=adwordsAccessToken, statement=searchTermPerformanceQuery) 
+    
+    lastSearchTermPerformanceQuery <<- searchTermPerformanceQuery
+    lastSearchTermPerformance <<- searchTermPerformance
+    
+  }
+    
+  filteredSearchTerms <- lastSearchTermPerformance %>%
+    filter(str_detect(lastSearchTermPerformance$Searchterm, lookupWords())) %>%
+    mutate(Term = str_extract(Searchterm, lookupWords()))
+ 
+  groupedSearchTerms <- filteredSearchTerms %>% group_by(Term) %>% 
+    summarise(Clicks = sum(Clicks), Impressions = sum(Impressions), Conversions = sum(Conversions), 
+              Cost = sum(Cost)) %>% 
+    mutate(Ctr = Clicks/Impressions, Cpc = Cost/Clicks, Cpa = Cost/Conversions, Cr = Conversions/Clicks)
+
+  groupedSearchTerms
+})
+  
+  renderDT({
+    datatable(searchTermsPerformance(), options = list(scrollX = T)) %>% 
+      formatCurrency(c("Cost", "Cpc","Cpa")) %>% 
+      formatPercentage(c("Ctr", "Cr"), 2)
+  })
+  
+
+```
+
