@@ -19,7 +19,7 @@ options(googleAuthR.webapp.client_id = clientId)
 options(googleAuthR.webapp.client_secret = clientSecret)
 ga_cache_call("cache")
 
-gaAuth <- ga_auth()
+#gaAuth <- ga_auth()
 
 trainStartDate <- "2016-05-07"
 trainEndDate <- "2018-04-30"
@@ -34,7 +34,7 @@ kpi <- "transactionRevenue"
 
 Grab revenue data:
 
-```{r Data grab}
+```{r Data grab, message=FALSE}
 
 gaData <- google_analytics(viewId, date_range = c(trainStartDate, validationEndDate), 
                            metrics = kpi, 

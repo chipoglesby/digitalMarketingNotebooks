@@ -1,0 +1,65 @@
+---
+title: "Budget pacing"
+author: "Zoran Selinger"
+date: "June 2, 2018"
+output: html_document
+runtime: shiny
+---
+
+# Initialise
+```{r echo=TRUE}
+
+library(RAdwords)
+library(tidyverse)
+library(lubridate)
+
+adwordsAccessToken <- doAuth()
+
+yesterday <- today() - 1
+firstOfMonth <- floor_date(yesterday, "month")
+nDaysinMonth <- days_in_month(yesterday)
+dayInMonth <- mday(yesterday)
+daysLeftInMonth <- nDaysinMonth - dayInMonth 
+percDaysGoneInMonth <- round((dayInMonth / nDaysinMonth) * 100)
+
+```
+
+# Input panel
+```{r echo=FALSE}
+
+inputPanel(
+  
+  textInput("adwordsAccountId", "Account ID", value = "587-337-7079"),
+  textInput("monthlyBudget", "Budget", value = 50000)
+  
+)
+
+```
+
+# Data grab
+```{r echo=FALSE}
+
+  analysis <- reactive({
+    
+  accountPerformanceQuery <- statement(select=c("Cost"),
+                                          report="ACCOUNT_PERFORMANCE_REPORT",
+                                          start=firstOfMonth,
+                                          end=yesterday)
+  
+    cost <- getData(clientCustomerId=input$adwordsAccountId,
+                                     google_auth=adwordsAccessToken, statement=accountPerformanceQuery) 
+    
+  percBudgetGoneInMonth <- (as.numeric(cost) / as.numeric(input$monthlyBudget)) * 100
+  
+  avgDailySpendLeft <- (as.numeric(input$monthlyBudget) - as.numeric(cost)) / daysLeftInMonth
+  
+  c(round(percBudgetGoneInMonth), round(avgDailySpendLeft))
+  })
+
+  renderText({
+    figures <- analysis()
+    
+    paste("We're ", percDaysGoneInMonth ,"% through the month and we spent ", figures[1] ,"% of the total budget. In order to spend the monthly budget you can spend at most €",  figures[2] ," daily for the remainder of the month.", sep = "")
+  })
+
+```

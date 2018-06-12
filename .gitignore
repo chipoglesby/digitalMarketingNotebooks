@@ -36,3 +36,4 @@ vignettes/*.pdf
 *.html
 
 global\.R
+.google.auth.RData
