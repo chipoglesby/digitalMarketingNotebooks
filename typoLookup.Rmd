@@ -1,0 +1,75 @@
+---
+title: "Typo Loookup"
+author: "Zoran Selinger"
+date: "June 12, 2018"
+output: html_document
+runtime: shiny
+---
+
+# Initialise
+```{r echo=TRUE}
+
+library(RAdwords)
+library(tidyverse)
+library(hunspell)
+
+adwordsAccessToken <- doAuth()
+
+```
+
+# Input panel
+```{r echo=FALSE}
+
+inputPanel(
+  
+  textInput("adwordsAccountId", "Account ID",
+            placeholder = "XXX-XXX-XXXX", value = "587-337-7079"),
+  
+  dateRangeInput("dateRange","Date Range", start = Sys.Date() - 15, end = Sys.Date()),
+  
+  textInput("lookupTerm", "Enter a word you'd like to fine misspellings for", "marvin"),
+  
+  actionButton("plotTypos", "Plot Data")
+  
+)
+
+```
+
+# Data grab
+```{r echo=FALSE}
+
+lastSearchTermPerformanceQuery <- NULL
+lastSearchTermPerformance <- NULL 
+
+searchTermsPerformance <- reactive({
+  
+  searchTermPerformanceQuery <- statement(select="Query",
+                                          report="SEARCH_QUERY_PERFORMANCE_REPORT",
+                                          start=input$dateRange[1],
+                                          end=input$dateRange[2])
+  
+  if(is.null(lastSearchTermPerformanceQuery) || !identical(lastSearchTermPerformanceQuery, searchTermPerformanceQuery)){
+    
+    searchTermPerformance <- getData(clientCustomerId=input$adwordsAccountId,
+                                     google_auth=adwordsAccessToken, statement=searchTermPerformanceQuery) 
+    
+    lastSearchTermPerformanceQuery <<- searchTermPerformanceQuery
+    lastSearchTermPerformance <<- searchTermPerformance
+    
+  }
+  
+positions <- aregexec(input$lookupTerm, lastSearchTermPerformance$Searchterm)  
+  
+substrings <- regmatches(lastSearchTermPerformance$Searchterm, positions)
+
+notEmpty <- substrings[!sapply(substrings, identical, character(0))]
+
+uniqueVariants <- unique(unlist(notEmpty))
+
+uniqueVariants
+    
+})
+  
+renderPrint(searchTermsPerformance())
+  
+```
