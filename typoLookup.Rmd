@@ -11,7 +11,6 @@ runtime: shiny
 
 library(RAdwords)
 library(tidyverse)
-library(hunspell)
 
 adwordsAccessToken <- doAuth()
 
@@ -58,7 +57,7 @@ searchTermsPerformance <- reactive({
     
   }
   
-positions <- aregexec(input$lookupTerm, lastSearchTermPerformance$Searchterm)  
+positions <- aregexec(input$lookupTerm, lastSearchTermPerformance$Searchterm, ignore.case = T)  
   
 substrings <- regmatches(lastSearchTermPerformance$Searchterm, positions)
 
