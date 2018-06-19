@@ -1,0 +1,59 @@
+---
+title: "Search term lookup with file"
+author: "Zoran Selinger"
+date: "6/19/2018"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(DT)
+
+```
+
+# Input panel
+```{r echo=FALSE}
+
+inputPanel(
+  
+  textInput("lookupTerm", "Enter a word you'd like to fine misspellings for", "buy"),
+                                     
+  fileInput("file1", "Choose CSV File",
+            multiple = FALSE,
+            accept = c("text/csv",
+                       "text/comma-separated-values,text/plain",
+                       ".csv"))
+  
+)
+
+```
+
+# Data grab
+```{r echo=FALSE}
+
+searchTermsPerformance <- reactive({
+    
+  df <- read.csv2(input$file1$datapath, header = TRUE, sep = ",") 
+  df$Cost <- as.numeric(df$Cost)
+  
+  filteredSearchTerms <- df %>%
+    filter(str_detect(df$Searchterm, input$lookupTerm)) %>%
+    mutate(Term = str_extract(Searchterm, input$lookupTerm))
+  
+  groupedSearchTerms <- filteredSearchTerms %>% group_by(Term) %>% 
+    summarise(Clicks = sum(Clicks), Impressions = sum(Impressions), Conversions = sum(Conversions), 
+              Cost = sum(Cost)) %>% 
+    mutate(Ctr = Clicks/Impressions, Cpc = Cost/Clicks, Cpa = Cost/Conversions, Cr = Conversions/Clicks)
+  
+  groupedSearchTerms
+})
+
+renderDT({
+  datatable(searchTermsPerformance(), options = list(scrollX = T)) %>% 
+    formatCurrency(c("Cost", "Cpc","Cpa")) %>% 
+    formatPercentage(c("Ctr", "Cr"), 2)
+})
+
+```
