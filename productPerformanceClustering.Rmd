@@ -1,0 +1,78 @@
+---
+title: "Product performance clustering"
+output: html_notebook
+---
+
+This report attempts to cluster product by their performance. 
+
+Initialise API keys, libraries and settings
+
+```{r Initialise}
+
+source("global.R")
+library(googleAuthR)
+library(googleAnalyticsR)
+library(dplyr)
+library(ggplot2)
+library(scales)
+options(googleAuthR.webapp.client_id = clientId)
+options(googleAuthR.webapp.client_secret = clientSecret)
+ga_cache_call("cache")
+
+gaAuth <- ga_auth()
+
+startDate <- "2018-06-01"
+endDate <- "2018-08-17"
+
+viewId <- "149579355"
+
+```
+
+Grab product data:
+
+```{r Data grab, message=FALSE}
+
+gaData <- google_analytics(viewId, date_range = c(startDate, endDate), 
+                           metrics = c("uniquePurchases", "itemRevenue", "itemQuantity",
+                                       "revenuePerItem", "itemsPerPurchase"), 
+                           dimensions = "productName", 
+                           anti_sample = TRUE)
+
+names(gaData) <- c("Product", "UniquePurchases", "Revenue", "Quantity", "AvgPrice", "AvgQuantity")
+
+glimpse(gaData)
+
+```
+
+Create K-means clusters:
+
+```{r cluster creation}
+
+set.seed(22)
+
+km <- kmeans(gaData[,-1], 3)
+
+gaData$cluster <- as.factor(km$cluster)
+  
+```
+
+Visualize clusters:
+
+```{r visualize clusters}
+
+ggplot(gaData, aes(x = Revenue, y = AvgPrice, colour = as.factor(cluster))) +
+  geom_point() +
+  scale_x_continuous(labels = comma)
+
+```
+
+
+```{r clustered products}
+
+gaData %>% filter(cluster == 1) %>% arrange(desc(Revenue)) %>% head()
+
+gaData %>% filter(cluster == 2) %>% arrange(desc(Revenue)) 
+
+gaData %>% filter(cluster == 3) %>% arrange(desc(Revenue))  %>% head()
+
+```
